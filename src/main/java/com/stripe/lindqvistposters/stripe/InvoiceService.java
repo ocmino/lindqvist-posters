@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.sql.Timestamp;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,8 +56,8 @@ public class InvoiceService {
         if (stripePoster == null) {
             throw new Exception("Poster not found");
         }
-        Order order = new Order(stripeCustomer.getId(), posterId, quantity, stripePoster.getPosterPrice(), new Date());
-        orderRepository.save(order);
+
+
 
         // Get price id
         String priceId = stripePoster.getPriceId();
@@ -92,8 +93,21 @@ public class InvoiceService {
         } catch(StripeException e) {
             System.out.println("Error creating invoice: " + e.getMessage());
         }
-    }
 
+        //TODO Save order to database
+        // Set the necessary fields in the Order object
+        Order order = new Order();
+        order.setStripeCustomer(stripeCustomer);
+        order.setStripePoster(stripePoster);
+        order.setOrderDate(new Timestamp(new Date().getTime()));
+        order.setTotalPrice(stripePoster.getPosterPrice() * quantity);
+        order.setQuantity(quantity);
+
+        // Save the order to the database
+        orderRepository.save(order);
+
+
+    }
 
     private Customer createCustomerInStripe(String customerName, String customerEmail, String customerAddress, int postalCode, String city, int phone) throws Exception {
         try {

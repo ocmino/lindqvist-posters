@@ -46,6 +46,10 @@ public class Order {
 
     }
 
+    public Order(String customerId, int posterId, int quantity, int i, Date date) {
+
+    }
+
     public Integer getId() {
         return id;
     }
