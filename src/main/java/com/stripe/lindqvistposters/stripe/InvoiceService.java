@@ -57,8 +57,6 @@ public class InvoiceService {
             throw new Exception("Poster not found");
         }
 
-
-
         // Get price id
         String priceId = stripePoster.getPriceId();
         System.out.println(priceId);
