@@ -13,15 +13,14 @@ import com.stripe.lindqvistposters.stripeposters.StripePosterRepository;
 import com.stripe.model.Customer;
 import com.stripe.model.Invoice;
 import com.stripe.model.InvoiceItem;
+import com.stripe.param.InvoiceCreateParams;
 import com.stripe.param.InvoiceItemCreateParams;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class InvoiceService {
@@ -39,9 +38,7 @@ public class InvoiceService {
     @Value("${stripe.api.key}")
     private String apiKey;
 
-    public void createInvoice(String customerName, String customerEmail, String customerAddress, int postalCode, String city, int phone,
-                              int posterId, int quantity) throws Exception {
-
+    public void createInvoice(String customerName, String customerEmail, String customerAddress, int postalCode, String city, int phone, List<Integer> posterIds) throws Exception {
         Stripe.apiKey = STRIPE_API_KEY;
 
         // Create a customer in Stripe
@@ -51,61 +48,74 @@ public class InvoiceService {
         StripeCustomer stripeCustomer = new StripeCustomer(customer.getId(), customerName, customerEmail, customerAddress, postalCode, city, phone);
         stripeCustomerRepository.save(stripeCustomer);
 
-        // Create an order in the orders table
-        StripePoster stripePoster = stripePosterRepository.findById(posterId).orElse(null);
-        if (stripePoster == null) {
-            throw new Exception("Poster not found");
-        }
+        List<OrderDTO> orderDTOs = new ArrayList<>();
 
-        // Get price id
-        String priceId = stripePoster.getPriceId();
-        System.out.println(priceId);
+        // Calculate total amount
+        double totalAmount = 0.0;
+        for (int i = 0; i < posterIds.size(); i++) {
+            StripePoster stripePoster = stripePosterRepository.findById(posterIds.get(i)).orElse(null);
+            if (stripePoster == null) {
+                throw new Exception("Poster not found");
+            }
+            // Check if poster exists in orderDTOs
+            boolean posterExists = false;
+            for (OrderDTO orderDTO : orderDTOs) {
+                if (orderDTO.getOrderposterId() == stripePoster.getId()) {
+                    orderDTO.setOrderquantity(orderDTO.getOrderquantity() + 1);
+                    posterExists = true;
+                }
+            }
+            if (!posterExists) {
+                OrderDTO orderDTO1 = new OrderDTO(stripePoster.getId(), 1);
+                orderDTOs.add(orderDTO1);
+            }
+            totalAmount += stripePoster.getPosterPrice();
+        }
 
         // Get customer stripe id
         String customerId = stripeCustomer.getStripeId();
-        System.out.println(customerId);
 
-        // Create an Invoice
-        InvoiceItemCreateParams invoiceItemParams =
-                InvoiceItemCreateParams.builder()
-                        .setCustomer(customerId)
-                        .setPrice(priceId)
-                        .setCurrency("sek")
-                        .setQuantity((long) quantity)
-                        .build();
-        try {
-            InvoiceItem.create(invoiceItemParams);
-        } catch(StripeException e) {
-            System.out.println("Error creating invoice item: " + e.getMessage());
+        for (OrderDTO orderDTO : orderDTOs) {
+            // Get price id
+            StripePoster stripePoster = stripePosterRepository.findById(orderDTO.getOrderposterId()).orElse(null);
+            if (stripePoster == null) {
+                throw new Exception("Poster not found");
+            }
+            String priceId = stripePoster.getPriceId();
+
+            // Create an Invoice Item
+            InvoiceItemCreateParams invoiceItemParams = InvoiceItemCreateParams.builder()
+                    .setCustomer(customerId)
+                    .setPrice(priceId)
+                    .setCurrency("sek")
+                    .setQuantity((long) orderDTO.getOrderquantity())
+                    .build();
+            try {
+                InvoiceItem invoiceItem = InvoiceItem.create(invoiceItemParams);
+                System.out.println("Invoice item created: " + invoiceItem.getId());
+            } catch (StripeException e) {
+                System.out.println("Error creating invoice item: " + e.getMessage());
+            }
         }
 
-        Map<String, Object> invoiceParams = new HashMap<>();
-        invoiceParams.put("customer", customer.getId());
-        invoiceParams.put("auto_advance", true);
-        invoiceParams.put("collection_method", "send_invoice");
-        invoiceParams.put("days_until_due", 30);
+        // Create an Invoice
+        InvoiceCreateParams invoiceParams = InvoiceCreateParams.builder()
+                .setCustomer(customer.getId())
+                .setAutoAdvance(true)
+                .setCollectionMethod(InvoiceCreateParams.CollectionMethod.SEND_INVOICE)
+                .setDaysUntilDue(30L)
+                .build();
 
         try {
             Invoice invoice = Invoice.create(invoiceParams);
             System.out.println("Invoice created: " + invoice.getId());
-        } catch(StripeException e) {
+        } catch (StripeException e) {
             System.out.println("Error creating invoice: " + e.getMessage());
         }
-
-        //TODO Save order to database
-        // Set the necessary fields in the Order object
-        Order order = new Order();
-        order.setStripeCustomer(stripeCustomer);
-        order.setStripePoster(stripePoster);
-        order.setOrderDate(new Timestamp(new Date().getTime()));
-        order.setTotalPrice(stripePoster.getPosterPrice() * quantity);
-        order.setQuantity(quantity);
-
-        // Save the order to the database
-        orderRepository.save(order);
-
-
     }
+
+
+
 
     private Customer createCustomerInStripe(String customerName, String customerEmail, String customerAddress, int postalCode, String city, int phone) throws Exception {
         try {

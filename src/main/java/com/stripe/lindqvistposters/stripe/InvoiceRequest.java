@@ -1,5 +1,7 @@
 package com.stripe.lindqvistposters.stripe;
 
+import java.util.List;
+
 public class InvoiceRequest {
     private String customerName;
 
@@ -8,8 +10,9 @@ public class InvoiceRequest {
     private int postalCode;
     private String city;
     private int phone;
-    private int posterId;
-    private int quantity;
+
+    private List<Integer> posterIds;
+
 
     public String getCustomerName() {
         return customerName;
@@ -59,19 +62,13 @@ public class InvoiceRequest {
         this.phone = phone;
     }
 
-    public int getPosterId() {
-        return posterId;
+    public List<Integer> getPosterIds() {
+        return posterIds;
     }
 
-    public void setPosterId(int posterId) {
-        this.posterId = posterId;
+    public void setPosterIds(List<Integer> posterIds) {
+        this.posterIds = posterIds;
     }
 
-    public int getQuantity() {
-        return quantity;
-    }
 
-    public void setQuantity(int quantity) {
-        this.quantity = quantity;
-    }
 }
